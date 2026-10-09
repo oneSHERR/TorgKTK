@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Container Checker</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231e1b4b'/%3E%3Crect x='8' y='17' width='48' height='32' rx='4' fill='%23667eea' stroke='%23c7d2fe' stroke-width='2'/%3E%3Cpath d='M16 22v22m8-22v22m8-22v22m8-22v22m8-22v22' stroke='%23e0e7ff' stroke-width='3'/%3E%3C/svg%3E">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.06);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --accent-1: #667eea;
+            --accent-2: #764ba2;
+            --success: #38ef7d;
+            --success-dark: #11998e;
+            --danger: #f45c43;
+            --danger-dark: #eb3349;
+            --text: rgba(255,255,255,0.95);
+            --text-dim: rgba(255,255,255,0.5);
+            --text-muted: rgba(255,255,255,0.35);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(102,126,234,0.35) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(118,75,162,0.35) 0%, transparent 50%),
+                linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            min-height: 100vh;
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        /* ── Particles ── */
+        .particles { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+        .particle { position: absolute; border-radius: 50%; }
+        .particle:nth-child(1) { width: 300px; height: 300px; background: radial-gradient(circle, rgba(102,126,234,0.08), transparent 70%); left: 5%; top: 10%; animation: float-a 18s ease-in-out infinite; }
+        .particle:nth-child(2) { width: 400px; height: 400px; background: radial-gradient(circle, rgba(118,75,162,0.08), transparent 70%); right: 5%; top: 30%; animation: float-b 22s ease-in-out infinite; }
+        .particle:nth-child(3) { width: 250px; height: 250px; background: radial-gradient(circle, rgba(102,126,234,0.06), transparent 70%); left: 40%; bottom: 10%; animation: float-c 20s ease-in-out infinite; }
+        .particle:nth-child(4) { width: 350px; height: 350px; background: radial-gradient(circle, rgba(118,75,162,0.06), transparent 70%); right: 30%; top: 5%; animation: float-a 25s ease-in-out infinite; }
+        .particle:nth-child(5) { width: 200px; height: 200px; background: radial-gradient(circle, rgba(102,126,234,0.07), transparent 70%); left: 60%; top: 60%; animation: float-b 16s ease-in-out infinite; }
+
+        @keyframes float-a { 0%,100% { transform: translate(0,0); } 50% { transform: translate(30px,-40px); } }
+        @keyframes float-b { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-40px,30px); } }
+        @keyframes float-c { 0%,100% { transform: translate(0,0); } 50% { transform: translate(20px,50px); } }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed; top: 24px; right: 24px; z-index: 999;
+            padding: 16px 28px; border-radius: 16px;
+            color: #fff; font-weight: 600; font-size: 14px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.2);
+            animation: toastIn 0.35s ease-out;
+            display: none;
+        }
+        .toast.show { display: block; }
+        .toast.success { background: linear-gradient(135deg, rgba(17,153,142,0.95), rgba(56,239,125,0.95)); }
+        .toast.error { background: linear-gradient(135deg, rgba(235,51,73,0.95), rgba(244,92,67,0.95)); }
+        @keyframes toastIn { from { opacity:0; transform: translateY(-16px) scale(0.95); } to { opacity:1; transform: translateY(0) scale(1); } }
+
+        /* ── Loading ── */
+        .loading-overlay {
+            position: fixed; inset: 0; z-index: 500;
+            display: flex; align-items: center; justify-content: center; flex-direction: column;
+            background: rgba(15,23,42,0.85); backdrop-filter: blur(10px);
+        }
+        .spinner { font-size: 64px; animation: float-b 2s ease-in-out infinite; }
+        .loading-text { color: var(--text-dim); margin-top: 20px; font-size: 16px; letter-spacing: 0.05em; }
+        .loading-bar { width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 16px; overflow: hidden; }
+        .loading-bar-inner { height: 100%; width: 30%; background: linear-gradient(90deg, var(--accent-1), var(--accent-2)); border-radius: 2px; animation: loadBar 1.5s ease-in-out infinite; }
+        @keyframes loadBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+
+        /* ── Header ── */
+        .header {
+            position: relative; z-index: 1;
+            background: linear-gradient(135deg, rgba(102,126,234,0.2), rgba(118,75,162,0.2));
+            border-bottom: 1px solid var(--glass-border);
+            padding: 44px 24px 32px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+        }
+        .header-glow {
+            position: absolute; top: -50%; left: 50%; transform: translateX(-50%);
+            width: 600px; height: 300px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(102,126,234,0.25), transparent 70%);
+            pointer-events: none;
+        }
+        .header h1 {
+            font-size: 40px; font-weight: 800;
+            background: linear-gradient(135deg, #fff, #a5b4fc, #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            position: relative; margin-bottom: 8px;
+        }
+        .header .subtitle { color: var(--text-dim); font-size: 15px; position: relative; }
+        .header .subtitle strong { color: #a5b4fc; }
+
+        /* ── Tabs ── */
+        .tabs { display: flex; gap: 10px; justify-content: center; margin-top: 24px; position: relative; }
+        .tab-btn {
+            padding: 12px 32px; border-radius: 14px; font-size: 15px; font-weight: 600;
+            cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05); color: var(--text-dim);
+            backdrop-filter: blur(10px); transition: all 0.3s ease;
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-btn:hover { border-color: rgba(102,126,234,0.4); background: rgba(102,126,234,0.12); }
+        .tab-btn.active {
+            border-color: rgba(102,126,234,0.5);
+            background: linear-gradient(135deg, rgba(102,126,234,0.3), rgba(118,75,162,0.3));
+            color: #fff; box-shadow: 0 4px 20px rgba(102,126,234,0.3);
+        }
+
+        /* ── Content ── */
+        .content { max-width: 900px; margin: 0 auto; padding: 32px 20px 60px; position: relative; z-index: 1; }
+        .tab-content { display: none; animation: fadeUp 0.5s ease-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+
+        /* ── Glass Card ── */
+        .glass-card {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: 20px; padding: 28px; margin-bottom: 28px;
+            backdrop-filter: blur(20px); box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        /* ── Info Box ── */
+        .info-box {
+            background: linear-gradient(135deg, rgba(102,126,234,0.15), rgba(118,75,162,0.15));
+            border: 1px solid rgba(102,126,234,0.25);
+            border-radius: 18px; padding: 20px 24px; margin-bottom: 28px;
+        }
+        .info-box h3 { color: #a5b4fc; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+        .info-box p { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
+
+        /* ── Form ── */
+        .label { display: block; margin-bottom: 10px; color: var(--text-dim); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+        .textarea {
+            width: 100%; padding: 20px; border-radius: 16px;
+            border: 1px solid var(--glass-border); background: rgba(0,0,0,0.25);
+            color: #fff; font-size: 16px; font-family: 'JetBrains Mono', monospace;
+            min-height: 200px; resize: vertical; outline: none; transition: all 0.3s;
+        }
+        .textarea::placeholder { color: var(--text-muted); }
+        .textarea:focus { border-color: rgba(102,126,234,0.5); box-shadow: 0 0 0 4px rgba(102,126,234,0.1); }
+        .input {
+            width: 100%; padding: 12px 16px; border-radius: 12px;
+            border: 1px solid var(--glass-border); background: rgba(0,0,0,0.25);
+            color: #fff; font-size: 14px; outline: none; transition: all 0.3s;
+        }
+        .input:focus { border-color: rgba(102,126,234,0.5); box-shadow: 0 0 0 4px rgba(102,126,234,0.1); }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 16px 32px; border-radius: 14px; border: none;
+            font-size: 16px; font-weight: 700; cursor: pointer;
+            font-family: 'Inter', sans-serif; transition: all 0.3s ease; color: #fff;
+        }
+        .btn:hover { transform: translateY(-2px); filter: brightness(1.15); }
+        .btn-primary { background: linear-gradient(135deg, var(--accent-1), var(--accent-2)); box-shadow: 0 6px 25px rgba(102,126,234,0.4); }
+        .btn-success { background: linear-gradient(135deg, var(--success-dark), var(--success)); box-shadow: 0 6px 20px rgba(17,153,142,0.3); }
+        .btn-ghost { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: var(--text-dim); box-shadow: none; }
+        .btn-sm { padding: 12px 24px; font-size: 14px; border-radius: 12px; }
+        .btn-row { display: flex; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
+
+        /* ── Stats ── */
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card {
+            background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border);
+            border-radius: 18px; padding: 24px; text-align: center;
+            backdrop-filter: blur(10px); animation: popIn 0.5s ease-out both;
+        }
+        .stat-card:nth-child(1) { border-top: 3px solid #a5b4fc; }
+        .stat-card:nth-child(1) .stat-number { color: #a5b4fc; }
+        .stat-card:nth-child(2) { border-top: 3px solid var(--success); animation-delay: 0.1s; }
+        .stat-card:nth-child(2) .stat-number { color: var(--success); }
+        .stat-card:nth-child(3) { border-top: 3px solid var(--danger); animation-delay: 0.2s; }
+        .stat-card:nth-child(3) .stat-number { color: var(--danger); }
+        .stat-number { font-size: 38px; font-weight: 800; line-height: 1; }
+        .stat-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-top: 6px; letter-spacing: 0.08em; }
+        @keyframes popIn { 0% { opacity:0; transform:scale(0.8); } 70% { transform:scale(1.05); } 100% { opacity:1; transform:scale(1); } }
+
+        /* ── Results ── */
+        .result-item {
+            display: flex; align-items: center; gap: 14px;
+            padding: 16px 22px; border-radius: 14px; margin-bottom: 10px;
+            backdrop-filter: blur(10px); animation: slideIn 0.4s ease-out both;
+            flex-wrap: wrap;
+        }
+        .result-item.owned {
+            background: linear-gradient(135deg, rgba(17,153,142,0.12), rgba(56,239,125,0.08));
+            border: 1px solid rgba(17,153,142,0.25);
+            box-shadow: 0 2px 12px rgba(56,239,125,0.08);
+        }
+        .result-item.not-owned {
+            background: linear-gradient(135deg, rgba(235,51,73,0.12), rgba(244,92,67,0.08));
+            border: 1px solid rgba(235,51,73,0.25);
+            box-shadow: 0 2px 12px rgba(244,92,67,0.08);
+        }
+        .result-icon { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 20px; }
+        .result-item.owned .result-icon { background: rgba(17,153,142,0.2); }
+        .result-item.not-owned .result-icon { background: rgba(235,51,73,0.2); }
+        .result-number { flex: 1 1 140px; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 16px; }
+        .result-item.owned .result-number { color: var(--success); }
+        .result-item.not-owned .result-number { color: var(--danger); }
+        .tag-owner { padding: 5px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, rgba(102,126,234,0.2), rgba(118,75,162,0.2)); border: 1px solid rgba(165,180,252,0.2); color: #a5b4fc; }
+        .tag-type { padding: 5px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; background: rgba(255,255,255,0.08); color: var(--text-dim); }
+        .result-item.not-owned .tag-owner,
+        .result-item.not-owned .tag-type { color: var(--danger); background: rgba(235,51,73,0.12); border: 1px solid rgba(235,51,73,0.25); }
+        .result-badge { padding: 6px 16px; border-radius: 24px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+        .result-item.owned .result-badge { background: rgba(17,153,142,0.25); color: var(--success); }
+        .result-item.not-owned .result-badge { background: rgba(235,51,73,0.25); color: var(--danger); }
+        @keyframes slideIn { from { opacity:0; transform:translateX(-24px); } to { opacity:1; transform:translateX(0); } }
+
+        /* ── DB Table ── */
+        .search-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+        .section-title { color: #a5b4fc; font-weight: 700; font-size: 16px; margin-bottom: 0; }
+        .db-table { width: 100%; border-collapse: separate; border-spacing: 0 6px; }
+        .db-table th { text-align: left; padding: 12px 16px; color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+        .db-table td { padding: 12px 16px; font-size: 14px; }
+        .db-table tr.data-row { transition: background 0.2s; }
+        .db-table tr.data-row:nth-child(even) { background: rgba(255,255,255,0.02); }
+        .db-table tr.data-row:hover { background: rgba(255,255,255,0.06); }
+        .cell-number { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px; color: #a5b4fc; }
+        .cell-type { padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.08); color: var(--text-dim); display: inline-block; }
+
+        /* ── Pagination ── */
+        .pagination { display: flex; justify-content: center; gap: 10px; margin-top: 20px; align-items: center; }
+        .page-btn { padding: 8px 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #a5b4fc; font-weight: 600; font-size: 13px; cursor: pointer; font-family: 'Inter', sans-serif; }
+        .page-btn:disabled { color: rgba(255,255,255,0.2); cursor: default; }
+        .page-info { color: var(--text-muted); font-size: 13px; font-weight: 600; }
+
+        /* ── Empty ── */
+        .empty-state { text-align: center; padding: 48px 20px; color: var(--text-muted); }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .stats { grid-template-columns: 1fr; }
+            .header h1 { font-size: 28px; }
+            .content { padding: 20px 12px; }
+            .glass-card { padding: 20px; }
+            .btn { padding: 14px 24px; font-size: 14px; }
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<div class="particles">
+    <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+    <div class="particle"></div><div class="particle"></div>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner">🚢</div>
+    <div class="loading-text" id="loadingText">Загрузка базы данных из Google Sheets...</div>
+    <div class="loading-bar"><div class="loading-bar-inner"></div></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Header -->
+<div class="header" id="mainApp" style="display:none;">
+    <div class="header-glow"></div>
+    <h1>🚢 Container Checker</h1>
+    <p class="subtitle">Проверка принадлежности контейнеров • В базе: <strong id="dbCount">0</strong></p>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('check')">🔍 Проверка</button>
+        <button class="tab-btn" onclick="switchTab('database')">📦 База данных</button>
+    </div>
+</div>
+
+<!-- Content -->
+<div class="content" id="mainContent" style="display:none;">
+
+    <!-- CHECK TAB -->
+    <div class="tab-content active" id="tab-check">
+        <div class="info-box">
+            <h3>ℹ️ Инструкция</h3>
+            <p>Введите номера контейнеров (каждый с новой строки). Контейнеры собственников со снятой галочкой «Учитывать» в Google Таблице отображаются как «Не найдено». После изменения галочек нажмите «Обновить базу».</p>
+            <p id="dbStatus" role="status" aria-live="polite">Загрузка базы и настроек собственников…</p>
+        </div>
+
+        <div class="glass-card">
+            <label class="label">📋 Номера контейнеров</label>
+            <textarea class="textarea" id="checkInput" placeholder="ACLU9606364&#10;AMFU8494393&#10;BEAU6238117&#10;..."></textarea>
+            <div class="btn-row">
+                <button class="btn btn-primary" onclick="checkContainers()">🔍 Проверить</button>
+                <button class="btn btn-success btn-sm" id="btnExport" onclick="exportResults()" style="display:none;">📥 Скачать CSV</button>
+                <button class="btn btn-ghost btn-sm" id="btnClear" onclick="clearResults()" style="display:none;">✕ Очистить</button>
+                <button class="btn btn-ghost btn-sm" onclick="reloadDb()">🔄 Обновить базу</button>
+            </div>
+        </div>
+
+        <div id="resultsSection" style="display:none;">
+            <div class="stats">
+                <div class="stat-card"><div class="stat-number" id="statTotal">0</div><div class="stat-label">Всего</div></div>
+                <div class="stat-card"><div class="stat-number" id="statOwned">0</div><div class="stat-label">Наши</div></div>
+                <div class="stat-card"><div class="stat-number" id="statNotOwned">0</div><div class="stat-label">Не найдены</div></div>
+            </div>
+            <div id="resultsList"></div>
+        </div>
+    </div>
+
+    <!-- DATABASE TAB -->
+    <div class="tab-content" id="tab-database">
+        <div class="info-box">
+            <h3>📊 Источник данных — Google Sheets</h3>
+            <p>База загружается из Google Таблицы. Чтобы обновить базу — отредактируй таблицу и нажми "Обновить базу".<br>
+            <a href="https://docs.google.com/spreadsheets/d/1aBKDL7gktAKdL9gwfXtr6dY3Dx6kQujg4ExmNv-Ixuo/edit" target="_blank" style="color:#a5b4fc;">📝 Открыть Google Таблицу</a></p>
+        </div>
+
+        <div class="glass-card">
+            <div class="btn-row" style="margin-top:0;">
+                <button class="btn btn-primary btn-sm" onclick="reloadDb()">🔄 Обновить базу</button>
+                <button class="btn btn-success btn-sm" onclick="exportDb()">📤 Экспорт CSV</button>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="search-row">
+                <div class="section-title">📋 База данных (<span id="filteredCount">0</span>)</div>
+                <input class="input" id="searchInput" placeholder="🔎 Поиск по номеру, собственнику..." style="width:280px;" oninput="renderTable()">
+            </div>
+            <div id="tableContainer"></div>
+            <div class="pagination" id="pagination" style="display:none;">
+                <button class="page-btn" id="btnPrev" onclick="changePage(-1)">← Назад</button>
+                <span class="page-info" id="pageInfo"></span>
+                <button class="page-btn" id="btnNext" onclick="changePage(1)">Вперёд →</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIG — Google Sheet ID
+// ═══════════════════════════════════════════════════════
+const SHEET_ID = '1aBKDL7gktAKdL9gwfXtr6dY3Dx6kQujg4ExmNv-Ixuo';
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
+const OWNERS_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=321772871`;
+
+let db = [];
+let ownerSettings = new Map();
+let dbReady = false;
+let currentPage = 0;
+const PAGE_SIZE = 100;
+let lastResults = null;
+
+// ═══════════════════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => loadDb());
+
+async function loadDb() {
+    dbReady = false;
+    clearResults();
+    document.getElementById('dbStatus').textContent = 'Загрузка базы и настроек собственников…';
+    showLoading('Загрузка базы и настроек собственников...');
+
+    try {
+        const [text, ownersText] = await Promise.all([
+            fetchCsv(CSV_URL),
+            fetchCsv(OWNERS_CSV_URL)
+        ]);
+        const nextOwnerSettings = parseOwnerSettings(ownersText);
+
+        const parsed = Papa.parse(text, { skipEmptyLines: true });
+        const rows = parsed.data;
+
+        // Detect header
+        let startRow = 0;
+        for (let i = 0; i < Math.min(rows.length, 5); i++) {
+            const row = rows[i].map(c => String(c || '').toLowerCase());
+            if (row.some(c => c.includes('ктк') || c.includes('контейнер') || c.includes('номер') || c.includes('箱') || c.includes('container') || c.includes('number'))) {
+                startRow = i + 1; break;
+            }
+        }
+        // If no header detected and first row looks like data, start from 0
+        if (startRow === 0) {
+            const first = String(rows[0]?.[0] || '');
+            if (/^[A-Z]{3,4}[A-Z0-9]\d{6,7}$/i.test(first.replace(/\s/g,''))) {
+                startRow = 0; // Data starts from first row
+            } else {
+                startRow = 1; // Skip header
+            }
+        }
+
+        const nextDb = [];
+        for (let i = startRow; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row?.[0]) continue;
+            const num = normalize(String(row[0]));
+            if (!num || num.length < 4) continue;
+            nextDb.push({
+                number: num,
+                owner: String(row[1] || '').trim(),
+                type: String(row[2] || '').trim()
+            });
+        }
+
+        if (!nextDb.length) throw new Error('Лист с контейнерами пуст или имеет неверный формат');
+        db = nextDb;
+        ownerSettings = nextOwnerSettings;
+        dbReady = true;
+        const excluded = [...ownerSettings.values()].filter(value => !value).length;
+        document.getElementById('dbStatus').textContent =
+            `Общие настройки загружены. Исключено собственников: ${excluded}.`;
+        hideLoading();
+        showApp();
+        toast(`База загружена: ${db.length} контейнеров`);
+    } catch (e) {
+        console.error(e);
+        hideLoading();
+        showApp();
+        document.getElementById('dbStatus').textContent =
+            'Не удалось загрузить базу или общие настройки. Проверка недоступна. Нажмите «Обновить базу», чтобы повторить.';
+        toast('Ошибка загрузки базы: ' + e.message, 'error');
+    }
+}
+
+async function fetchCsv(url) {
+    const resp = await fetch(url + '&_=' + Date.now(), { cache: 'no-store' });
+    if (!resp.ok) throw new Error('Ошибка загрузки: ' + resp.status);
+    return resp.text();
+}
+
+function normalizeOwner(owner) {
+    return String(owner || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function parseOwnerSettings(text) {
+    const parsed = Papa.parse(text, { skipEmptyLines: 'greedy' });
+    if (parsed.errors.length) throw new Error('Не удалось прочитать лист «Собственники»');
+    const rows = parsed.data;
+    if (normalizeOwner(rows[0]?.[0]) !== 'СОБСТВЕННИК' ||
+        normalizeOwner(rows[0]?.[1]) !== 'УЧИТЫВАТЬ') {
+        throw new Error('В листе «Собственники» нужны столбцы «Собственник» и «Учитывать»');
+    }
+    const settings = new Map();
+    for (const row of rows.slice(1)) {
+        const owner = normalizeOwner(row[0]);
+        if (!owner) continue;
+        const value = normalizeOwner(row[1]);
+        if (value !== 'TRUE' && value !== 'FALSE') {
+            throw new Error('Проверьте галочку «Учитывать» для собственника ' + owner);
+        }
+        if (settings.has(owner)) throw new Error('Повтор собственника в настройках: ' + owner);
+        settings.set(owner, value === 'TRUE');
+    }
+    if (!settings.size) throw new Error('Лист «Собственники» пуст');
+    return settings;
+}
+
+async function reloadDb() {
+    await loadDb();
+    renderTable();
+}
+
+// ═══════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════
+function normalize(num) {
+    return (num || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+}
+
+function showApp() {
+    document.getElementById('mainApp').style.display = '';
+    document.getElementById('mainContent').style.display = '';
+    document.getElementById('dbCount').textContent = db.length;
+    renderTable();
+}
+
+function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.className = `toast show ${type}`;
+    el.innerHTML = (type === 'error' ? '⚠️ ' : '✅ ') + msg;
+    setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+function showLoading(text) {
+    document.getElementById('loadingText').textContent = text;
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════
+// Tabs
+// ═══════════════════════════════════════════════════════
+function switchTab(id) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', (i === 0 && id === 'check') || (i === 1 && id === 'database'));
+    });
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const tab = document.getElementById('tab-' + id);
+    tab.classList.add('active');
+    tab.style.animation = 'none'; tab.offsetHeight; tab.style.animation = '';
+    if (id === 'database') renderTable();
+}
+
+// ═══════════════════════════════════════════════════════
+// Check
+// ═══════════════════════════════════════════════════════
+function checkContainers() {
+    if (!dbReady) { toast('Сначала загрузите базу и настройки собственников', 'error'); return; }
+    const input = document.getElementById('checkInput').value;
+    if (!input.trim()) { toast('Введите номера контейнеров', 'error'); return; }
+
+    const lines = input.split(/[\n,;\t]+/).map(s => s.trim()).filter(Boolean);
+    const dbMap = new Map(db.map(r => [r.number, r]));
+
+    let owned = 0;
+    const results = lines.map(line => {
+        const num = normalize(line);
+        const f = dbMap.get(num);
+        // Keep database details even when the owner's checkbox is off.
+        // Owners not yet listed in settings stay enabled by default.
+        const found = !!f && ownerSettings.get(normalizeOwner(f.owner)) !== false;
+        if (found) owned++;
+        return { number: num, found, inDatabase: !!f, owner: f?.owner || '—', type: f?.type || '—' };
+    });
+
+    document.getElementById('statTotal').textContent = results.length;
+    document.getElementById('statOwned').textContent = owned;
+    document.getElementById('statNotOwned').textContent = results.length - owned;
+
+    const list = document.getElementById('resultsList');
+    list.innerHTML = '';
+    results.forEach((r, i) => {
+        const cls = r.found ? 'owned' : 'not-owned';
+        const tags = r.inDatabase
+            ? `<span class="tag-owner">${r.owner}</span><span class="tag-type">${r.type}</span>`
+            : '';
+        list.innerHTML += `
+            <div class="result-item ${cls}" style="animation-delay:${i * 0.04}s">
+                <div class="result-icon">${r.found ? '✅' : '❌'}</div>
+                <div class="result-number">${r.number}</div>
+                ${tags}
+                <div class="result-badge">${r.found ? 'Наш контейнер' : 'Не найдено'}</div>
+            </div>`;
+    });
+
+    document.getElementById('resultsSection').style.display = '';
+    document.getElementById('btnExport').style.display = '';
+    document.getElementById('btnClear').style.display = '';
+    lastResults = results;
+}
+
+function clearResults() {
+    document.getElementById('resultsSection').style.display = 'none';
+    document.getElementById('btnExport').style.display = 'none';
+    document.getElementById('btnClear').style.display = 'none';
+    lastResults = null;
+}
+
+function exportResults() {
+    if (!lastResults) return;
+    let csv = '\uFEFF' + 'Номер;Статус;Собственник;Тип\n';
+    lastResults.forEach(r => { csv += `${r.number};${r.found ? 'Наш' : 'Не найдено'};${r.owner};${r.type}\n`; });
+    download(csv, 'результаты_проверки.csv');
+}
+
+// ═══════════════════════════════════════════════════════
+// Database Table
+// ═══════════════════════════════════════════════════════
+function getFiltered() {
+    const q = (document.getElementById('searchInput')?.value || '').trim();
+    if (!q) return db;
+    const up = q.toUpperCase(), lo = q.toLowerCase();
+    return db.filter(r => r.number.includes(up) || r.owner.toLowerCase().includes(lo) || r.type.toLowerCase().includes(lo));
+}
+
+function renderTable() {
+    const filtered = getFiltered();
+    document.getElementById('filteredCount').textContent = filtered.length;
+    document.getElementById('dbCount').textContent = db.length;
+
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
+    const paged = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+    const container = document.getElementById('tableContainer');
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="icon">📭</div>${db.length === 0 ? 'База пуста. Проверьте ссылку на Google Таблицу.' : 'Ничего не найдено по запросу.'}</div>`;
+        document.getElementById('pagination').style.display = 'none';
+        return;
+    }
+
+    let html = '<div style="overflow-x:auto;"><table class="db-table"><thead><tr>';
+    html += '<th>Номер</th><th>Собственник</th><th>Тип</th>';
+    html += '</tr></thead><tbody>';
+
+    paged.forEach(r => {
+        html += `<tr class="data-row">
+            <td class="cell-number">${r.number}</td>
+            <td>${r.owner}</td>
+            <td><span class="cell-type">${r.type}</span></td>
+        </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+
+    if (totalPages > 1) {
+        document.getElementById('pagination').style.display = 'flex';
+        document.getElementById('pageInfo').textContent = `${currentPage + 1} / ${totalPages}`;
+        document.getElementById('btnPrev').disabled = currentPage === 0;
+        document.getElementById('btnNext').disabled = currentPage >= totalPages - 1;
+    } else {
+        document.getElementById('pagination').style.display = 'none';
+    }
+}
+
+function changePage(d) { currentPage += d; renderTable(); }
+
+// ═══════════════════════════════════════════════════════
+// Export DB
+// ═══════════════════════════════════════════════════════
+function exportDb() {
+    let csv = '\uFEFF' + 'Номер;Собственник;Тип\n';
+    db.forEach(r => { csv += `${r.number};${r.owner};${r.type}\n`; });
+    download(csv, 'база_контейнеров.csv');
+}
+
+function download(content, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
+    a.download = filename;
+    a.click();
+}
+</script>
+
+</body>
+</html>
+
